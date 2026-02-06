@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Boomerang Space</title>
     <style>
         * {
@@ -18,6 +18,10 @@
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             font-family: 'Segoe UI', sans-serif;
             overflow: hidden;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         .game-wrapper {
             display: flex;
@@ -173,6 +177,54 @@
             border-color: #0ff;
             box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
         }
+        #game-canvas {
+            touch-action: none;
+        }
+        @media (max-width: 840px) {
+            .game-wrapper {
+                gap: 5px;
+                width: 100vw;
+                padding: 5px;
+            }
+            .hud {
+                width: 100%;
+                font-size: 14px;
+                padding: 6px 10px;
+            }
+            .stat-value {
+                font-size: 16px;
+            }
+            .stats {
+                gap: 15px;
+            }
+            .hearts {
+                font-size: 18px;
+            }
+            #game-canvas {
+                width: 100%;
+                height: auto;
+                border-width: 2px;
+            }
+            .controls-info {
+                font-size: 12px;
+            }
+            .overlay {
+                padding: 30px 20px;
+                width: 90vw;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+            #start-screen h1 {
+                font-size: 32px;
+            }
+            .boomerang-icon {
+                font-size: 48px;
+            }
+            .upgrade-info {
+                padding: 10px;
+                font-size: 13px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -200,7 +252,7 @@
             </div>
         </div>
         <canvas id="game-canvas" width="800" height="600"></canvas>
-        <div class="controls-info">WASD / Arrow Keys: Move | SPACE: Throw Boomerang | M: Mute</div>
+        <div class="controls-info" id="controls-info">WASD / Arrow Keys: Move | SPACE: Throw Boomerang | M: Mute</div>
     </div>
 
     <div id="start-screen" class="overlay">
@@ -296,6 +348,14 @@
 
         // Input
         const keys = {};
+
+        // ── Mobile detection & touch state ────────────────────
+        const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        let touchActive = false;
+        let lastTouchX = 0;
+        let lastTouchY = 0;
+        let touchDeltaX = 0;
+        let touchDeltaY = 0;
 
         // ═══════════════════════════════════════════════════════
         // ── 8-Bit Audio System (Web Audio API) ────────────────
@@ -723,15 +783,27 @@
         function updatePlayer(dt) {
             const moveAmount = player.speed * dt / 16;
 
-            const left = keys['ArrowLeft'] || keys['a'] || keys['A'];
-            const right = keys['ArrowRight'] || keys['d'] || keys['D'];
-            const up = keys['ArrowUp'] || keys['w'] || keys['W'];
-            const down = keys['ArrowDown'] || keys['s'] || keys['S'];
+            if (isMobile && touchActive) {
+                // Move player by touch drag delta
+                player.x += touchDeltaX;
+                player.y += touchDeltaY;
+                touchDeltaX = 0;
+                touchDeltaY = 0;
+            } else {
+                const left = keys['ArrowLeft'] || keys['a'] || keys['A'];
+                const right = keys['ArrowRight'] || keys['d'] || keys['D'];
+                const up = keys['ArrowUp'] || keys['w'] || keys['W'];
+                const down = keys['ArrowDown'] || keys['s'] || keys['S'];
 
-            if (left && player.x > 0) player.x -= moveAmount;
-            if (right && player.x < CANVAS_WIDTH - player.width) player.x += moveAmount;
-            if (up && player.y > 0) player.y -= moveAmount;
-            if (down && player.y < CANVAS_HEIGHT - player.height - 10) player.y += moveAmount;
+                if (left && player.x > 0) player.x -= moveAmount;
+                if (right && player.x < CANVAS_WIDTH - player.width) player.x += moveAmount;
+                if (up && player.y > 0) player.y -= moveAmount;
+                if (down && player.y < CANVAS_HEIGHT - player.height - 10) player.y += moveAmount;
+            }
+
+            // Clamp to canvas bounds
+            player.x = Math.max(0, Math.min(CANVAS_WIDTH - player.width, player.x));
+            player.y = Math.max(0, Math.min(CANVAS_HEIGHT - player.height - 10, player.y));
 
             if (invincible) {
                 invincibleTimer -= dt;
@@ -1611,6 +1683,57 @@
             keys[e.key] = false;
         });
 
+        // ── Touch input (mobile) ──────────────────────────────
+        if (isMobile) {
+            function getTouchCanvasPos(touch) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = CANVAS_WIDTH / rect.width;
+                const scaleY = CANVAS_HEIGHT / rect.height;
+                return {
+                    x: (touch.clientX - rect.left) * scaleX,
+                    y: (touch.clientY - rect.top) * scaleY
+                };
+            }
+
+            canvas.addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (!gameRunning) return;
+                const touch = e.touches[0];
+                const pos = getTouchCanvasPos(touch);
+                touchActive = true;
+                lastTouchX = pos.x;
+                lastTouchY = pos.y;
+                touchDeltaX = 0;
+                touchDeltaY = 0;
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', e => {
+                e.preventDefault();
+                if (!touchActive || !gameRunning) return;
+                const touch = e.touches[0];
+                const pos = getTouchCanvasPos(touch);
+                touchDeltaX += pos.x - lastTouchX;
+                touchDeltaY += pos.y - lastTouchY;
+                lastTouchX = pos.x;
+                lastTouchY = pos.y;
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', e => {
+                e.preventDefault();
+                if (!gameRunning) return;
+                touchActive = false;
+                touchDeltaX = 0;
+                touchDeltaY = 0;
+                createBoomerang();
+            }, { passive: false });
+
+            canvas.addEventListener('touchcancel', e => {
+                touchActive = false;
+                touchDeltaX = 0;
+                touchDeltaY = 0;
+            });
+        }
+
         document.getElementById('start-btn').addEventListener('click', startGame);
         document.getElementById('restart-btn').addEventListener('click', startGame);
         document.getElementById('next-level-btn').addEventListener('click', nextLevel);
@@ -1618,6 +1741,12 @@
             Audio8Bit.init();
             Audio8Bit.toggleMute();
         });
+
+        // ── Mobile UI adjustments ─────────────────────────────
+        if (isMobile) {
+            document.getElementById('controls-info').textContent =
+                'Touch & Drag: Move | Release: Throw Boomerang';
+        }
 
         // Initial HUD render
         updateHUD();
