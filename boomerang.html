@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boomerang Space</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Segoe UI', sans-serif;
+            overflow: hidden;
+        }
+        .game-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 800px;
+            color: #fff;
+            font-size: 18px;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+        }
+        .hearts {
+            display: flex;
+            gap: 5px;
+            font-size: 24px;
+        }
+        .stats {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+        }
+        .stat-value {
+            font-size: 20px;
+            color: #0ff;
+        }
+        #game-canvas {
+            border: 3px solid #4a4a6a;
+            border-radius: 10px;
+            background: #000;
+        }
+        .controls-info {
+            color: #888;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 50px;
+            border: 3px solid #0ff;
+            border-radius: 20px;
+            text-align: center;
+            color: #fff;
+            z-index: 10;
+        }
+        .overlay h1, .overlay h2 {
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px currentColor;
+        }
+        #start-screen h1 {
+            font-size: 48px;
+            color: #0ff;
+        }
+        #victory-screen h2 {
+            font-size: 42px;
+            color: #0f0;
+        }
+        #game-over-screen h2 {
+            font-size: 42px;
+            color: #f00;
+        }
+        .boomerang-icon {
+            font-size: 64px;
+            margin: 20px 0;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: linear-gradient(135deg, #0ff, #00a8cc);
+            border: none;
+            border-radius: 10px;
+            color: #000;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px #0ff;
+        }
+        .upgrade-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 255, 255, 0.1);
+            border-radius: 10px;
+            border: 1px solid #0ff;
+        }
+        .upgrade-info h3 {
+            color: #0ff;
+            margin-bottom: 10px;
+        }
+        .celebration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            animation: fall 3s linear forwards;
+        }
+        @keyframes fall {
+            to {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+        .mute-btn {
+            background: none;
+            border: 2px solid #555;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 8px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .mute-btn:hover {
+            border-color: #0ff;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="hud">
+            <div class="hearts" id="hearts"></div>
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-label">LEVEL</span>
+                    <span class="stat-value" id="level">1</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">SCORE</span>
+                    <span class="stat-value" id="score">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">COMBO</span>
+                    <span class="stat-value" id="combo">x1</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">DAMAGE</span>
+                    <span class="stat-value" id="damage">10</span>
+                </div>
+                <button class="mute-btn" id="mute-btn" title="Toggle sound">&#x1F50A;</button>
+            </div>
+        </div>
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+        <div class="controls-info">WASD / Arrow Keys: Move | SPACE: Throw Boomerang | M: Mute</div>
+    </div>
+
+    <div id="start-screen" class="overlay">
+        <h1>BOOMERANG SPACE</h1>
+        <div class="boomerang-icon">&#x1FA83;</div>
+        <p>Defeat the alien bosses with your mighty boomerang!</p>
+        <div class="upgrade-info">
+            <h3>How to Play</h3>
+            <p>&#x2022; Throw your boomerang to damage the boss</p>
+            <p>&#x2022; Boomerang bounces off walls and returns to you</p>
+            <p>&#x2022; Catch upgrades to power up!</p>
+            <p>&#x2022; Avoid enemy bullets</p>
+        </div>
+        <div class="upgrade-info">
+            <h3>Upgrades</h3>
+            <p>&#x2694;&#xFE0F; <span style="color:#f80">Damage</span> - Increase boomerang damage</p>
+            <p>&#x2764;&#xFE0F; <span style="color:#f00">Health</span> - Add +1 max heart</p>
+            <p>&#x1F4A8; <span style="color:#0ff">Speed</span> - Increase movement speed</p>
+            <p>&#x1FA83; <span style="color:#ff0">Multi</span> - Add +1 boomerang</p>
+            <p>&#x26A1; <span style="color:#f0f">Boom Speed</span> - Faster boomerangs</p>
+        </div>
+        <button class="btn" id="start-btn">START GAME</button>
+    </div>
+
+    <div id="victory-screen" class="overlay" style="display: none;">
+        <h2>BOSS DEFEATED!</h2>
+        <p>You defeated the Level <span id="defeated-level">1</span> Boss!</p>
+        <p>Score: <span id="victory-score">0</span></p>
+        <button class="btn" id="next-level-btn">NEXT LEVEL</button>
+    </div>
+
+    <div id="game-over-screen" class="overlay" style="display: none;">
+        <h2>GAME OVER</h2>
+        <p>You reached Level <span id="final-level">1</span></p>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <button class="btn" id="restart-btn">TRY AGAIN</button>
+    </div>
+
+    <div class="celebration" id="celebration"></div>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        const CANVAS_WIDTH = canvas.width;
+        const CANVAS_HEIGHT = canvas.height;
+
+        // ── Game state ──────────────────────────────────────────
+        let gameRunning = false;
+        let level = 1;
+        let score = 0;
+        let lastTime = 0;
+
+        // Combo system
+        let combo = 1;
+        let comboTimer = 0;
+        const COMBO_TIMEOUT = 3000;
+
+        // Screen shake
+        let shakeIntensity = 0;
+        let shakeDuration = 0;
+
+        // ── Player ──────────────────────────────────────────────
+        const player = {
+            x: CANVAS_WIDTH / 2 - 30,
+            y: CANVAS_HEIGHT - 80,
+            width: 60,
+            height: 40,
+            speed: 8,
+            maxHearts: 3,
+            hearts: 3,
+            damage: 10,
+            boomerangSpeed: 14,
+            maxBoomerangs: 1,
+            color: '#0ff'
+        };
+
+        // ── Object pools ────────────────────────────────────────
+        let boomerangs = [];
+        let bullets = [];
+        let upgrades = [];
+        let particles = [];
+        let floatingTexts = [];
+
+        const BOOMERANG_SIZE = 25;
+
+        // ── Boss ────────────────────────────────────────────────
+        let boss = null;
+
+        // Invincibility
+        let invincible = false;
+        let invincibleTimer = 0;
+
+        // Input
+        const keys = {};
+
+        // ═══════════════════════════════════════════════════════
+        // ── 8-Bit Audio System (Web Audio API) ────────────────
+        // ═══════════════════════════════════════════════════════
+        const Audio8Bit = {
+            ctx: null,
+            masterGain: null,
+            musicGain: null,
+            sfxGain: null,
+            muted: false,
+
+            // Music timer
+            gameMusicTimer: null,
+            gameMusicStep: 0,
+
+            // Boomerang continuous sound
+            boomerangNodes: null,
+
+            init() {
+                if (this.ctx) {
+                    if (this.ctx.state === 'suspended') this.ctx.resume();
+                    return;
+                }
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.connect(this.ctx.destination);
+                this.masterGain.gain.value = 1.0;
+
+                this.musicGain = this.ctx.createGain();
+                this.musicGain.connect(this.masterGain);
+                this.musicGain.gain.value = 0.25;
+
+                this.sfxGain = this.ctx.createGain();
+                this.sfxGain.connect(this.masterGain);
+                this.sfxGain.gain.value = 0.4;
+
+                // Resume immediately - browsers may create context in suspended state
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            },
+
+            toggleMute() {
+                this.muted = !this.muted;
+                if (this.masterGain) {
+                    this.masterGain.gain.value = this.muted ? 0 : 1;
+                }
+                document.getElementById('mute-btn').textContent = this.muted ? '\uD83D\uDD07' : '\uD83D\uDD0A';
+            },
+
+            // ── Helper: play a single tone ──
+            playNote(freq, duration, type, vol, delay, dest) {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime + (delay || 0);
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type || 'square';
+                osc.frequency.setValueAtTime(freq, t);
+                gain.gain.setValueAtTime(vol || 0.15, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+                osc.connect(gain);
+                gain.connect(dest || this.musicGain);
+                osc.start(t);
+                osc.stop(t + duration + 0.01);
+            },
+
+            // ── Helper: play a noise burst ──
+            playNoise(duration, vol, dest) {
+                if (!this.ctx) return;
+                const sr = this.ctx.sampleRate;
+                const len = sr * duration;
+                const buf = this.ctx.createBuffer(1, len, sr);
+                const data = buf.getChannelData(0);
+                for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+                const src = this.ctx.createBufferSource();
+                src.buffer = buf;
+                const gain = this.ctx.createGain();
+                const t = this.ctx.currentTime;
+                gain.gain.setValueAtTime(vol || 0.1, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+                src.connect(gain);
+                gain.connect(dest || this.sfxGain);
+                src.start(t);
+            },
+
+            // ════════════════════════════════════════════════════
+            // GAME MUSIC - Driving & Rhythmic (C minor, lower vol)
+            // ════════════════════════════════════════════════════
+            playGameMusic() {
+                if (!this.ctx) return;
+                this.stopGameMusic();
+                this.musicGain.gain.value = 0.38;
+
+                const n = {
+                    C2: 65.41, Eb2: 77.78, F2: 87.31, G2: 98, Ab2: 103.83, Bb2: 116.54,
+                    C3: 130.81, Eb3: 155.56, F3: 174.61, G3: 196, Bb3: 233.08,
+                    C4: 261.63, Eb4: 311.13, F4: 349.23, G4: 392, Bb4: 466.16
+                };
+
+                // Driving bass line
+                const bass = [
+                    n.C2,  n.C2,  n.C2,  n.Eb2, n.F2,  n.F2,  n.G2,  n.G2,
+                    n.Ab2, n.Ab2, n.G2,  n.G2,  n.F2,  n.Eb2, n.C2,  n.C2,
+                    n.C2,  n.C2,  n.Eb2, n.F2,  n.G2,  n.G2,  n.Bb2, n.Bb2,
+                    n.G2,  n.F2,  n.Eb2, n.C2,  n.Eb2, n.F2,  n.G2,  n.C2
+                ];
+
+                // Sparse melody over the top (0 = rest)
+                const mel = [
+                    n.C4,  0,     n.Eb4, 0,     n.G4,  0,     n.F4,  n.Eb4,
+                    0,     0,     n.C4,  0,     0,     n.Eb4, 0,     0,
+                    n.F4,  0,     n.G4,  0,     n.Bb3, 0,     n.G3,  0,
+                    0,     n.F4,  0,     n.Eb4, n.C4,  0,     0,     0
+                ];
+
+                this.gameMusicStep = 0;
+                const tempo = 135;
+
+                this.gameMusicTimer = setInterval(() => {
+                    if (!this.ctx) return;
+                    const step = this.gameMusicStep % bass.length;
+
+                    // Bass (triangle)
+                    this.playNote(bass[step], 0.11, 'triangle', 0.18, 0, this.musicGain);
+
+                    // Melody (square, only on non-rest)
+                    if (mel[step] > 0) {
+                        this.playNote(mel[step], 0.09, 'square', 0.06, 0, this.musicGain);
+                    }
+
+                    // Kick thump every 4 steps
+                    if (step % 4 === 0) {
+                        this.playNote(50, 0.07, 'triangle', 0.22, 0, this.musicGain);
+                    }
+
+                    // Hi-hat noise every 2 steps
+                    if (step % 2 === 0) {
+                        this.playNoise(0.03, 0.035, this.musicGain);
+                    }
+
+                    this.gameMusicStep++;
+                }, tempo);
+            },
+
+            stopGameMusic() {
+                if (this.gameMusicTimer) {
+                    clearInterval(this.gameMusicTimer);
+                    this.gameMusicTimer = null;
+                }
+            },
+
+            stopAllMusic() {
+                this.stopGameMusic();
+            },
+
+            // ════════════════════════════════════════════════════
+            // BOOMERANG SPINNING SOUND (continuous while active)
+            // ════════════════════════════════════════════════════
+            playBoomerangSound() {
+                if (!this.ctx || this.boomerangNodes) return;
+
+                const osc1 = this.ctx.createOscillator();
+                const osc2 = this.ctx.createOscillator();
+                const lfo = this.ctx.createOscillator();
+                const lfoGain = this.ctx.createGain();
+                const mainGain = this.ctx.createGain();
+
+                // Two detuned square waves for that retro wobble
+                osc1.type = 'square';
+                osc1.frequency.value = 240;
+                osc2.type = 'square';
+                osc2.frequency.value = 246;
+
+                // LFO modulates pitch for spinning feel
+                lfo.type = 'triangle';
+                lfo.frequency.value = 10;
+                lfoGain.gain.value = 50;
+
+                lfo.connect(lfoGain);
+                lfoGain.connect(osc1.frequency);
+                lfoGain.connect(osc2.frequency);
+
+                mainGain.gain.value = 0.07;
+                osc1.connect(mainGain);
+                osc2.connect(mainGain);
+                mainGain.connect(this.sfxGain);
+
+                osc1.start();
+                osc2.start();
+                lfo.start();
+
+                this.boomerangNodes = { osc1, osc2, lfo, mainGain };
+            },
+
+            stopBoomerangSound() {
+                if (!this.boomerangNodes) return;
+                const { osc1, osc2, lfo, mainGain } = this.boomerangNodes;
+                // Fade out quickly to avoid click
+                mainGain.gain.setValueAtTime(mainGain.gain.value, this.ctx.currentTime);
+                mainGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+                const nodes = this.boomerangNodes;
+                this.boomerangNodes = null;
+                setTimeout(() => {
+                    try { nodes.osc1.stop(); nodes.osc2.stop(); nodes.lfo.stop(); } catch (e) {}
+                }, 60);
+            },
+
+            // ════════════════════════════════════════════════════
+            // HIT BOSS - Impact crash (square pitch drop + noise)
+            // ════════════════════════════════════════════════════
+            playHitBoss() {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(420, t);
+                osc.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+                gain.gain.setValueAtTime(0.2, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+                osc.connect(gain);
+                gain.connect(this.sfxGain);
+                osc.start(t);
+                osc.stop(t + 0.21);
+
+                this.playNoise(0.08, 0.12, this.sfxGain);
+            },
+
+            // ════════════════════════════════════════════════════
+            // HIT PLAYER - Alarming crash (higher pitch + noise)
+            // ════════════════════════════════════════════════════
+            playHitPlayer() {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(620, t);
+                osc.frequency.exponentialRampToValueAtTime(90, t + 0.25);
+                gain.gain.setValueAtTime(0.25, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+                osc.connect(gain);
+                gain.connect(this.sfxGain);
+                osc.start(t);
+                osc.stop(t + 0.31);
+
+                this.playNoise(0.15, 0.18, this.sfxGain);
+            },
+
+            // ════════════════════════════════════════════════════
+            // POWER-UP - Cheerful ascending arpeggio
+            // ════════════════════════════════════════════════════
+            playPowerUp() {
+                if (!this.ctx) return;
+                // C5 -> E5 -> G5 -> C6
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    this.playNote(freq, 0.1, 'square', 0.14, i * 0.055, this.sfxGain);
+                });
+            },
+
+            // ════════════════════════════════════════════════════
+            // BOSS DEFEAT - Victory fanfare
+            // ════════════════════════════════════════════════════
+            playBossDefeat() {
+                if (!this.ctx) return;
+                // C4 -> E4 -> G4 -> C5 ascending
+                const fanfare = [261.63, 329.63, 392, 523.25];
+                fanfare.forEach((freq, i) => {
+                    this.playNote(freq, 0.22, 'square', 0.16, i * 0.12, this.sfxGain);
+                });
+                // Final triumphant chord
+                this.playNote(523.25, 0.6, 'square', 0.1, 0.52, this.sfxGain);
+                this.playNote(659.25, 0.6, 'square', 0.08, 0.52, this.sfxGain);
+                this.playNote(783.99, 0.6, 'triangle', 0.1, 0.52, this.sfxGain);
+            },
+
+            // ════════════════════════════════════════════════════
+            // GAME OVER - Sad descending tones
+            // ════════════════════════════════════════════════════
+            playGameOver() {
+                if (!this.ctx) return;
+                // C4 -> A3 -> F3 -> C3
+                const notes = [261.63, 220, 174.61, 130.81];
+                notes.forEach((freq, i) => {
+                    this.playNote(freq, 0.3, 'square', 0.14, i * 0.22, this.sfxGain);
+                });
+            }
+        };
+
+        // ── Star layers for parallax ────────────────────────────
+        const starLayers = [];
+        function initStars() {
+            starLayers.length = 0;
+            for (let layer = 0; layer < 3; layer++) {
+                const stars = [];
+                const count = 30 + layer * 20;
+                for (let i = 0; i < count; i++) {
+                    stars.push({
+                        x: Math.random() * CANVAS_WIDTH,
+                        y: Math.random() * CANVAS_HEIGHT,
+                        size: 1 + layer * 0.5 + Math.random(),
+                        brightness: 0.3 + Math.random() * 0.7
+                    });
+                }
+                starLayers.push({ stars, speed: 0.2 + layer * 0.3 });
+            }
+        }
+        initStars();
+
+        // ── Particle system ─────────────────────────────────────
+        function spawnParticles(x, y, color, count, speedRange, life) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = speedRange[0] + Math.random() * (speedRange[1] - speedRange[0]);
+                particles.push({
+                    x, y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: life || 600,
+                    maxLife: life || 600,
+                    size: 2 + Math.random() * 3,
+                    color
+                });
+            }
+        }
+
+        function spawnTrailParticle(x, y, color) {
+            particles.push({
+                x: x + (Math.random() - 0.5) * 6,
+                y: y + (Math.random() - 0.5) * 6,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                life: 300,
+                maxLife: 300,
+                size: 2 + Math.random() * 2,
+                color
+            });
+        }
+
+        // ── Floating text system ────────────────────────────────
+        function spawnFloatingText(x, y, text, color, size) {
+            floatingTexts.push({
+                x, y,
+                text,
+                color,
+                size: size || 18,
+                life: 1000,
+                maxLife: 1000,
+                vy: -1.5
+            });
+        }
+
+        // ── Screen shake ────────────────────────────────────────
+        function triggerShake(intensity, duration) {
+            shakeIntensity = Math.max(shakeIntensity, intensity);
+            shakeDuration = Math.max(shakeDuration, duration);
+        }
+
+        // ── Boss creation ───────────────────────────────────────
+        function createBoss() {
+            const baseHP = 120;
+            const hpMultiplier = 1 + (level - 1) * 0.6;
+
+            boss = {
+                x: CANVAS_WIDTH / 2 - 75,
+                y: 50,
+                width: 150,
+                height: 100,
+                maxHP: Math.floor(baseHP * hpMultiplier),
+                hp: Math.floor(baseHP * hpMultiplier),
+                shootCooldown: Math.max(400, 1500 - level * 120),
+                lastShot: 0,
+                bulletsPerShot: Math.min(1 + Math.floor(level / 2), 9),
+                moveSpeed: 2 + level * 0.4,
+                vx: 2 + level * 0.4,
+                vy: 1 + level * 0.25,
+                targetX: CANVAS_WIDTH / 2,
+                targetY: 100,
+                color: getBossColor(level),
+                flashTimer: 0,
+                enraged: false,
+                entryY: -120,
+                entered: false
+            };
+        }
+
+        function getBossColor(lvl) {
+            const colors = ['#f0f', '#f00', '#ff0', '#0f0', '#00f', '#f80', '#8f0'];
+            return colors[(lvl - 1) % colors.length];
+        }
+
+        // ── Boomerang creation ──────────────────────────────────
+        function createBoomerang() {
+            if (boomerangs.length > 0) return;
+
+            const count = player.maxBoomerangs;
+            const totalSpread = 60 * (Math.PI / 180);
+            const angleStep = count > 1 ? totalSpread / (count - 1) : 0;
+            const startAngle = count > 1 ? -totalSpread / 2 : 0;
+
+            for (let i = 0; i < count; i++) {
+                const angle = startAngle + (i * angleStep);
+                const vx = Math.sin(angle) * player.boomerangSpeed;
+                const vy = -Math.cos(angle) * player.boomerangSpeed;
+
+                boomerangs.push({
+                    x: player.x + player.width / 2,
+                    y: player.y,
+                    vx, vy,
+                    rotation: 0,
+                    returning: false,
+                    bounces: 0,
+                    hitBoss: false,
+                    trailTimer: 0
+                });
+            }
+
+            // Start boomerang spinning sound
+            Audio8Bit.playBoomerangSound();
+        }
+
+        // ── Update functions (delta-time based) ─────────────────
+        function updatePlayer(dt) {
+            const moveAmount = player.speed * dt / 16;
+
+            const left = keys['ArrowLeft'] || keys['a'] || keys['A'];
+            const right = keys['ArrowRight'] || keys['d'] || keys['D'];
+            const up = keys['ArrowUp'] || keys['w'] || keys['W'];
+            const down = keys['ArrowDown'] || keys['s'] || keys['S'];
+
+            if (left && player.x > 0) player.x -= moveAmount;
+            if (right && player.x < CANVAS_WIDTH - player.width) player.x += moveAmount;
+            if (up && player.y > 0) player.y -= moveAmount;
+            if (down && player.y < CANVAS_HEIGHT - player.height - 10) player.y += moveAmount;
+
+            if (invincible) {
+                invincibleTimer -= dt;
+                if (invincibleTimer <= 0) invincible = false;
+            }
+        }
+
+        function updateBoomerangs(dt) {
+            const factor = dt / 16;
+
+            boomerangs = boomerangs.filter(b => {
+                b.x += b.vx * factor;
+                b.y += b.vy * factor;
+                b.rotation += 0.4 * factor;
+
+                // Trail particles
+                b.trailTimer -= dt;
+                if (b.trailTimer <= 0) {
+                    spawnTrailParticle(b.x, b.y, '#ff0');
+                    b.trailTimer = 40;
+                }
+
+                // Wall bouncing (left/right)
+                if (b.x <= BOOMERANG_SIZE / 2) {
+                    b.x = BOOMERANG_SIZE / 2;
+                    b.vx = Math.abs(b.vx);
+                    b.bounces++;
+                }
+                if (b.x >= CANVAS_WIDTH - BOOMERANG_SIZE / 2) {
+                    b.x = CANVAS_WIDTH - BOOMERANG_SIZE / 2;
+                    b.vx = -Math.abs(b.vx);
+                    b.bounces++;
+                }
+
+                // Top wall - start returning
+                if (b.y <= BOOMERANG_SIZE / 2) {
+                    b.y = BOOMERANG_SIZE / 2;
+                    b.returning = true;
+                }
+
+                // Only home back to player once returning or hit boss
+                if (b.returning || b.hitBoss) {
+                    const targetX = player.x + player.width / 2;
+                    const targetY = player.y;
+                    const dx = targetX - b.x;
+                    const dy = targetY - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist > 0) {
+                        const returnSpeed = player.boomerangSpeed * 0.9;
+                        b.vx = (dx / dist) * returnSpeed;
+                        b.vy = (dy / dist) * returnSpeed;
+                    }
+                }
+
+                // Catch boomerang
+                const pcx = player.x + player.width / 2;
+                const pcy = player.y + player.height / 2;
+                const distP = Math.sqrt((b.x - pcx) ** 2 + (b.y - pcy) ** 2);
+                const canCatch = b.returning || b.hitBoss;
+
+                if (canCatch && distP < player.width / 2 + BOOMERANG_SIZE / 2) {
+                    return false;
+                }
+
+                if (b.y > CANVAS_HEIGHT + 50) return false;
+
+                return true;
+            });
+
+            // Stop boomerang sound when all boomerangs are gone
+            if (boomerangs.length === 0) {
+                Audio8Bit.stopBoomerangSound();
+            }
+        }
+
+        function updateBoss(dt) {
+            if (!boss) return;
+
+            if (!boss.entered) {
+                boss.entryY += 2 * (dt / 16);
+                boss.y = boss.entryY;
+                if (boss.entryY >= 50) {
+                    boss.entered = true;
+                    boss.y = 50;
+                }
+                return;
+            }
+
+            const factor = dt / 16;
+
+            if (boss.flashTimer > 0) boss.flashTimer -= dt;
+
+            if (!boss.enraged && boss.hp <= boss.maxHP * 0.3) {
+                boss.enraged = true;
+                boss.shootCooldown = Math.max(200, boss.shootCooldown * 0.6);
+                boss.vx *= 1.4;
+                boss.vy *= 1.4;
+                spawnFloatingText(boss.x + boss.width / 2, boss.y - 40, 'ENRAGED!', '#f00', 28);
+                spawnParticles(boss.x + boss.width / 2, boss.y + boss.height / 2, '#f00', 30, [2, 6], 800);
+            }
+
+            const dx = boss.targetX - boss.x;
+            const dy = boss.targetY - boss.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 5) {
+                boss.x += (dx / dist) * boss.vx * factor;
+                boss.y += (dy / dist) * boss.vy * factor;
+            } else {
+                const maxY = CANVAS_HEIGHT * 0.55;
+                boss.targetX = 50 + Math.random() * (CANVAS_WIDTH - boss.width - 100);
+                boss.targetY = 30 + Math.random() * (maxY - boss.height - 30);
+            }
+
+            boss.x = Math.max(20, Math.min(CANVAS_WIDTH - boss.width - 20, boss.x));
+            boss.y = Math.max(20, Math.min(CANVAS_HEIGHT * 0.55, boss.y));
+
+            const now = Date.now();
+            if (now - boss.lastShot > boss.shootCooldown) {
+                boss.lastShot = now;
+                shootBullets();
+            }
+        }
+
+        function shootBullets() {
+            const centerX = boss.x + boss.width / 2;
+            const startY = boss.y + boss.height;
+
+            const pcx = player.x + player.width / 2;
+            const pcy = player.y + player.height / 2;
+            const baseAngle = Math.atan2(pcy - startY, pcx - centerX);
+
+            const bulletSpeed = 5 + level * 0.5;
+            const count = boss.enraged ? boss.bulletsPerShot + 2 : boss.bulletsPerShot;
+
+            for (let i = 0; i < count; i++) {
+                const spread = (i - (count - 1) / 2) * 18;
+                const angle = baseAngle + (spread * Math.PI / 180);
+
+                bullets.push({
+                    x: centerX,
+                    y: startY,
+                    vx: Math.cos(angle) * bulletSpeed,
+                    vy: Math.sin(angle) * bulletSpeed,
+                    radius: 6
+                });
+            }
+        }
+
+        function updateBullets(dt) {
+            const factor = dt / 16;
+            bullets = bullets.filter(b => {
+                b.x += b.vx * factor;
+                b.y += b.vy * factor;
+                return b.y < CANVAS_HEIGHT + 20 && b.y > -20 &&
+                       b.x > -20 && b.x < CANVAS_WIDTH + 20;
+            });
+        }
+
+        function updateUpgrades(dt) {
+            const factor = dt / 16;
+            upgrades = upgrades.filter(u => {
+                u.y += u.speed * factor;
+                u.rotation += 0.05 * factor;
+                return u.y < CANVAS_HEIGHT + 50;
+            });
+        }
+
+        function updateParticles(dt) {
+            particles = particles.filter(p => {
+                const factor = dt / 16;
+                p.x += p.vx * factor;
+                p.y += p.vy * factor;
+                p.life -= dt;
+                return p.life > 0;
+            });
+        }
+
+        function updateFloatingTexts(dt) {
+            floatingTexts = floatingTexts.filter(t => {
+                const factor = dt / 16;
+                t.y += t.vy * factor;
+                t.life -= dt;
+                return t.life > 0;
+            });
+        }
+
+        function updateCombo(dt) {
+            if (combo > 1) {
+                comboTimer -= dt;
+                if (comboTimer <= 0) {
+                    combo = 1;
+                    updateHUD();
+                }
+            }
+        }
+
+        function updateShake(dt) {
+            if (shakeDuration > 0) {
+                shakeDuration -= dt;
+                if (shakeDuration <= 0) shakeIntensity = 0;
+            }
+        }
+
+        function updateStars(dt) {
+            const factor = dt / 16;
+            for (const layer of starLayers) {
+                for (const star of layer.stars) {
+                    star.y += layer.speed * factor;
+                    if (star.y > CANVAS_HEIGHT) {
+                        star.y = 0;
+                        star.x = Math.random() * CANVAS_WIDTH;
+                    }
+                }
+            }
+        }
+
+        // ── Upgrade spawning ────────────────────────────────────
+        function spawnUpgrade(x, y) {
+            const types = ['damage', 'health', 'speed', 'multishot', 'boomerangspeed'];
+            const type = types[Math.floor(Math.random() * types.length)];
+
+            upgrades.push({
+                x, y,
+                type,
+                width: 30,
+                height: 30,
+                speed: 3,
+                rotation: 0
+            });
+        }
+
+        // ── Collision detection ─────────────────────────────────
+        function checkCollisions() {
+            // Boomerangs vs Boss
+            if (boss && boss.entered) {
+                for (const b of boomerangs) {
+                    if (!b.hitBoss &&
+                        b.x > boss.x && b.x < boss.x + boss.width &&
+                        b.y > boss.y && b.y < boss.y + boss.height) {
+
+                        const dmg = player.damage * combo;
+                        boss.hp -= dmg;
+                        b.returning = true;
+                        b.hitBoss = true;
+                        boss.flashTimer = 150;
+
+                        // Combo
+                        combo = Math.min(combo + 1, 10);
+                        comboTimer = COMBO_TIMEOUT;
+
+                        // Hit particles
+                        spawnParticles(b.x, b.y, boss.color, 12, [1, 4], 400);
+
+                        // Damage number
+                        const comboColor = combo > 5 ? '#f00' : combo > 2 ? '#ff0' : '#fff';
+                        spawnFloatingText(b.x, b.y - 20, `-${dmg}`, comboColor, 16 + combo * 2);
+
+                        // Score
+                        score += dmg * 10;
+
+                        // Screen shake on big hits
+                        if (combo >= 3) triggerShake(combo * 1.5, 150);
+
+                        // Hit sound
+                        Audio8Bit.playHitBoss();
+
+                        // Upgrade drop
+                        if (Math.random() < 0.35) {
+                            spawnUpgrade(boss.x + boss.width / 2, boss.y + boss.height);
+                        }
+
+                        if (boss.hp <= 0) {
+                            defeatBoss();
+                        }
+
+                        updateHUD();
+                    }
+                }
+            }
+
+            // Bullets vs Player
+            if (!invincible) {
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    const b = bullets[i];
+                    const dx = b.x - (player.x + player.width / 2);
+                    const dy = b.y - (player.y + player.height / 2);
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < b.radius + player.width / 3) {
+                        bullets.splice(i, 1);
+                        playerHit();
+                        break;
+                    }
+                }
+            }
+
+            // Player vs Boss (contact damage)
+            if (!invincible && boss && boss.entered) {
+                const px = player.x + player.width / 2;
+                const py = player.y + player.height / 2;
+                // Check overlap between player center and boss bounding box (with small padding)
+                if (px > boss.x - 5 && px < boss.x + boss.width + 5 &&
+                    py > boss.y - 5 && py < boss.y + boss.height + 5) {
+                    playerHit();
+                }
+            }
+
+            // Player vs Upgrades
+            for (let i = upgrades.length - 1; i >= 0; i--) {
+                const u = upgrades[i];
+                if (u.x > player.x - u.width &&
+                    u.x < player.x + player.width &&
+                    u.y > player.y - u.height &&
+                    u.y < player.y + player.height) {
+
+                    applyUpgrade(u.type);
+                    upgrades.splice(i, 1);
+                }
+            }
+        }
+
+        function applyUpgrade(type) {
+            const names = {
+                'damage': 'DAMAGE UP!',
+                'health': 'HEALTH UP!',
+                'speed': 'SPEED UP!',
+                'multishot': 'MULTI BOOM!',
+                'boomerangspeed': 'BOOM SPEED!'
+            };
+            const colors = {
+                'damage': '#f80',
+                'health': '#f00',
+                'speed': '#0ff',
+                'multishot': '#ff0',
+                'boomerangspeed': '#f0f'
+            };
+
+            switch (type) {
+                case 'damage':
+                    player.damage += 2;
+                    break;
+                case 'health':
+                    player.maxHearts += 1;
+                    player.hearts = Math.min(player.hearts + 1, player.maxHearts);
+                    break;
+                case 'speed':
+                    player.speed += 0.5;
+                    break;
+                case 'multishot':
+                    player.maxBoomerangs += 1;
+                    break;
+                case 'boomerangspeed':
+                    player.boomerangSpeed += 2;
+                    break;
+            }
+
+            // Power-up sound
+            Audio8Bit.playPowerUp();
+
+            spawnFloatingText(player.x + player.width / 2, player.y - 30, names[type], colors[type], 22);
+            spawnParticles(player.x + player.width / 2, player.y, colors[type], 15, [1, 3], 500);
+            updateHUD();
+        }
+
+        function playerHit() {
+            player.hearts--;
+            invincible = true;
+            invincibleTimer = 1500;
+
+            // Hit sound
+            Audio8Bit.playHitPlayer();
+
+            // Red flash particles
+            spawnParticles(player.x + player.width / 2, player.y + player.height / 2, '#f00', 20, [2, 5], 500);
+            triggerShake(8, 300);
+
+            // Reset combo
+            combo = 1;
+            comboTimer = 0;
+
+            updateHUD();
+
+            if (player.hearts <= 0) {
+                spawnParticles(player.x + player.width / 2, player.y + player.height / 2, '#0ff', 40, [2, 8], 1000);
+                spawnParticles(player.x + player.width / 2, player.y + player.height / 2, '#fff', 20, [3, 6], 800);
+                gameOver();
+            }
+        }
+
+        function defeatBoss() {
+            gameRunning = false;
+            score += level * 1000 * combo;
+
+            // Stop game music, play victory jingle
+            Audio8Bit.stopGameMusic();
+            Audio8Bit.stopBoomerangSound();
+            Audio8Bit.playBossDefeat();
+
+            const cx = boss.x + boss.width / 2;
+            const cy = boss.y + boss.height / 2;
+            spawnParticles(cx, cy, boss.color, 50, [2, 8], 1200);
+            spawnParticles(cx, cy, '#fff', 30, [1, 6], 1000);
+            spawnParticles(cx, cy, '#ff0', 20, [3, 7], 900);
+            triggerShake(12, 500);
+
+            createCelebration();
+
+            document.getElementById('defeated-level').textContent = level;
+            document.getElementById('victory-score').textContent = score;
+            document.getElementById('victory-screen').style.display = 'block';
+        }
+
+        function createCelebration() {
+            const celebration = document.getElementById('celebration');
+            celebration.innerHTML = '';
+
+            const colors = ['#f00', '#0f0', '#00f', '#ff0', '#f0f', '#0ff', '#fff'];
+
+            for (let i = 0; i < 100; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.top = -10 + 'px';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animationDelay = Math.random() * 2 + 's';
+                confetti.style.animationDuration = (2 + Math.random() * 2) + 's';
+                celebration.appendChild(confetti);
+            }
+
+            setTimeout(() => { celebration.innerHTML = ''; }, 5000);
+        }
+
+        function nextLevel() {
+            level++;
+            bullets = [];
+            upgrades = [];
+            boomerangs = [];
+            particles = [];
+            floatingTexts = [];
+            combo = 1;
+            comboTimer = 0;
+            player.x = CANVAS_WIDTH / 2 - player.width / 2;
+            player.y = CANVAS_HEIGHT - 80;
+
+            createBoss();
+            updateHUD();
+
+            document.getElementById('victory-screen').style.display = 'none';
+            gameRunning = true;
+            lastTime = performance.now();
+
+            // Restart game music for next level
+            Audio8Bit.playGameMusic();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameRunning = false;
+
+            // Stop game music, play game over sound
+            Audio8Bit.stopGameMusic();
+            Audio8Bit.stopBoomerangSound();
+            Audio8Bit.playGameOver();
+
+            document.getElementById('final-level').textContent = level;
+            document.getElementById('final-score').textContent = score;
+            document.getElementById('game-over-screen').style.display = 'block';
+        }
+
+        // ── Drawing functions ───────────────────────────────────
+        function drawStars() {
+            for (const layer of starLayers) {
+                for (const star of layer.stars) {
+                    const alpha = star.brightness * (0.6 + 0.4 * Math.sin(Date.now() / 1000 + star.x));
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                    ctx.fillRect(star.x, star.y, star.size, star.size);
+                }
+            }
+        }
+
+        function drawPlayer() {
+            if (invincible && Math.floor(invincibleTimer / 80) % 2 === 0) return;
+
+            ctx.save();
+
+            const enginePulse = 10 + Math.sin(Date.now() / 60) * 5;
+            const gradient = ctx.createRadialGradient(
+                player.x + player.width / 2, player.y + player.height + 5, 2,
+                player.x + player.width / 2, player.y + player.height + 5, enginePulse
+            );
+            gradient.addColorStop(0, 'rgba(255, 136, 0, 0.8)');
+            gradient.addColorStop(0.5, 'rgba(255, 60, 0, 0.4)');
+            gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(player.x + 10, player.y + player.height - 5, player.width - 20, enginePulse + 10);
+
+            ctx.fillStyle = '#f80';
+            ctx.beginPath();
+            ctx.moveTo(player.x + 15, player.y + player.height);
+            ctx.lineTo(player.x + player.width / 2, player.y + player.height + 10 + Math.random() * 8);
+            ctx.lineTo(player.x + player.width - 15, player.y + player.height);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = player.color;
+            ctx.shadowColor = player.color;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2, player.y);
+            ctx.lineTo(player.x + player.width, player.y + player.height);
+            ctx.lineTo(player.x + player.width / 2, player.y + player.height - 10);
+            ctx.lineTo(player.x, player.y + player.height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2, player.y + 15, 7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+        }
+
+        function drawBoomerangs() {
+            boomerangs.forEach(b => {
+                ctx.save();
+                ctx.translate(b.x, b.y);
+                ctx.rotate(b.rotation);
+
+                ctx.shadowColor = '#ff0';
+                ctx.shadowBlur = 20;
+
+                ctx.fillStyle = '#ff0';
+                ctx.beginPath();
+                ctx.moveTo(0, -BOOMERANG_SIZE / 2);
+                ctx.quadraticCurveTo(BOOMERANG_SIZE / 2, -BOOMERANG_SIZE / 4, BOOMERANG_SIZE / 2, 0);
+                ctx.quadraticCurveTo(BOOMERANG_SIZE / 2, BOOMERANG_SIZE / 4, 0, 0);
+                ctx.quadraticCurveTo(-BOOMERANG_SIZE / 4, BOOMERANG_SIZE / 2, 0, BOOMERANG_SIZE / 2);
+                ctx.quadraticCurveTo(BOOMERANG_SIZE / 4, BOOMERANG_SIZE / 2, 0, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+                ctx.restore();
+            });
+        }
+
+        function drawBoss() {
+            if (!boss) return;
+
+            ctx.save();
+
+            const flashing = boss.flashTimer > 0;
+
+            if (boss.enraged) {
+                const auraSize = 10 + Math.sin(Date.now() / 100) * 5;
+                ctx.shadowColor = '#f00';
+                ctx.shadowBlur = 20 + auraSize;
+            }
+
+            ctx.fillStyle = flashing ? '#fff' : boss.color;
+            ctx.beginPath();
+            ctx.ellipse(boss.x + boss.width / 2, boss.y + boss.height / 2,
+                       boss.width / 2, boss.height / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(boss.x + boss.width / 3, boss.y + boss.height / 3, 15, 0, Math.PI * 2);
+            ctx.arc(boss.x + boss.width * 2 / 3, boss.y + boss.height / 3, 15, 0, Math.PI * 2);
+            ctx.fill();
+
+            const eyeLX = boss.x + boss.width / 3;
+            const eyeRX = boss.x + boss.width * 2 / 3;
+            const eyeY = boss.y + boss.height / 3;
+            const pcx = player.x + player.width / 2;
+            const pcy = player.y + player.height / 2;
+
+            for (const ex of [eyeLX, eyeRX]) {
+                const dx = pcx - ex;
+                const dy = pcy - eyeY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const pupilOffset = 5;
+                const px = ex + (dx / dist) * pupilOffset;
+                const py = eyeY + (dy / dist) * pupilOffset;
+
+                ctx.fillStyle = boss.enraged ? '#ff0' : '#f00';
+                ctx.beginPath();
+                ctx.arc(px, py, 7, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            if (boss.enraged) {
+                const mx = boss.x + boss.width / 2;
+                const my = boss.y + boss.height * 0.7;
+                ctx.moveTo(mx - 25, my);
+                ctx.lineTo(mx - 15, my + 10);
+                ctx.lineTo(mx - 5, my);
+                ctx.lineTo(mx + 5, my + 10);
+                ctx.lineTo(mx + 15, my);
+                ctx.lineTo(mx + 25, my + 10);
+                ctx.closePath();
+            } else {
+                ctx.ellipse(boss.x + boss.width / 2, boss.y + boss.height * 0.7,
+                           30, 15, 0, 0, Math.PI);
+            }
+            ctx.fill();
+
+            ctx.restore();
+
+            const barWidth = boss.width + 20;
+            const barHeight = 14;
+            const barX = boss.x - 10;
+            const barY = boss.y - 30;
+
+            ctx.fillStyle = '#222';
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(barX, barY, barWidth, barHeight, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            const hpPct = Math.max(0, boss.hp / boss.maxHP);
+            const hpColor = hpPct > 0.5 ? '#0f0' : hpPct > 0.25 ? '#ff0' : '#f00';
+
+            if (hpPct > 0) {
+                ctx.fillStyle = hpColor;
+                ctx.beginPath();
+                ctx.roundRect(barX + 2, barY + 2, (barWidth - 4) * hpPct, barHeight - 4, 3);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.fillRect(barX + 2, barY + 2, (barWidth - 4) * hpPct, (barHeight - 4) / 2);
+            }
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${Math.max(0, boss.hp)} / ${boss.maxHP}`, boss.x + boss.width / 2, barY + 11);
+
+            ctx.fillStyle = boss.enraged ? '#f00' : '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText(`${boss.enraged ? '!! ' : ''}BOSS LV.${level}${boss.enraged ? ' !!' : ''}`,
+                        boss.x + boss.width / 2, barY - 8);
+        }
+
+        function drawBullets() {
+            bullets.forEach(b => {
+                ctx.save();
+
+                ctx.shadowColor = '#f00';
+                ctx.shadowBlur = 12;
+
+                ctx.fillStyle = '#f44';
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius + 1, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            });
+        }
+
+        function drawUpgrades() {
+            upgrades.forEach(u => {
+                ctx.save();
+                ctx.translate(u.x + u.width / 2, u.y + u.height / 2);
+                ctx.rotate(u.rotation);
+
+                const colors = {
+                    'damage': '#f80',
+                    'health': '#f00',
+                    'speed': '#0ff',
+                    'multishot': '#ff0',
+                    'boomerangspeed': '#f0f'
+                };
+                const color = colors[u.type] || '#fff';
+
+                const pulse = 1 + Math.sin(Date.now() / 200) * 0.15;
+
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 15;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(0, 0, (u.width / 2) * pulse, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const icons = {
+                    'damage': '\u2694\uFE0F',
+                    'health': '\u2764\uFE0F',
+                    'speed': '\uD83D\uDCA8',
+                    'multishot': '\uD83E\uDE83',
+                    'boomerangspeed': '\u26A1'
+                };
+                ctx.fillText(icons[u.type] || '?', 0, 0);
+
+                ctx.restore();
+            });
+        }
+
+        function drawParticles() {
+            for (const p of particles) {
+                const alpha = p.life / p.maxLife;
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function drawFloatingTexts() {
+            for (const t of floatingTexts) {
+                const alpha = t.life / t.maxLife;
+                const scale = 0.8 + 0.4 * (1 - alpha);
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = t.color;
+                ctx.font = `bold ${Math.floor(t.size * scale)}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.shadowColor = t.color;
+                ctx.shadowBlur = 8;
+                ctx.fillText(t.text, t.x, t.y);
+                ctx.restore();
+            }
+        }
+
+        // ── Main draw ───────────────────────────────────────────
+        function draw() {
+            ctx.save();
+
+            if (shakeDuration > 0) {
+                const ox = (Math.random() - 0.5) * shakeIntensity * 2;
+                const oy = (Math.random() - 0.5) * shakeIntensity * 2;
+                ctx.translate(ox, oy);
+            }
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(-10, -10, CANVAS_WIDTH + 20, CANVAS_HEIGHT + 20);
+
+            drawStars();
+            drawBoss();
+            drawPlayer();
+            drawBoomerangs();
+            drawBullets();
+            drawUpgrades();
+            drawParticles();
+            drawFloatingTexts();
+
+            ctx.restore();
+        }
+
+        function updateHUD() {
+            let heartsStr = '';
+            for (let i = 0; i < player.maxHearts; i++) {
+                heartsStr += i < player.hearts ? '\u2764\uFE0F' : '\uD83D\uDDA4';
+            }
+            document.getElementById('hearts').textContent = heartsStr;
+            document.getElementById('level').textContent = level;
+            document.getElementById('score').textContent = score;
+            document.getElementById('damage').textContent = player.damage;
+            document.getElementById('combo').textContent = combo > 1 ? `x${combo}` : 'x1';
+            document.getElementById('combo').style.color = combo >= 5 ? '#f00' : combo >= 3 ? '#ff0' : '#0ff';
+        }
+
+        // ── Game loop (delta-time) ──────────────────────────────
+        function gameLoop(timestamp) {
+            if (!gameRunning) {
+                if (particles.length > 0 || floatingTexts.length > 0) {
+                    const dt = timestamp - lastTime;
+                    lastTime = timestamp;
+                    updateParticles(dt);
+                    updateFloatingTexts(dt);
+                    updateShake(dt);
+                    draw();
+                    requestAnimationFrame(gameLoop);
+                }
+                return;
+            }
+
+            const dt = Math.min(timestamp - lastTime, 50);
+            lastTime = timestamp;
+
+            updatePlayer(dt);
+            updateBoomerangs(dt);
+            updateBoss(dt);
+            updateBullets(dt);
+            updateUpgrades(dt);
+            updateParticles(dt);
+            updateFloatingTexts(dt);
+            updateCombo(dt);
+            updateShake(dt);
+            updateStars(dt);
+            checkCollisions();
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ── Game start / restart ────────────────────────────────
+        function startGame() {
+            // Initialize audio on user gesture
+            Audio8Bit.init();
+            Audio8Bit.playGameMusic();
+
+            level = 1;
+            score = 0;
+            combo = 1;
+            comboTimer = 0;
+            player.hearts = 3;
+            player.maxHearts = 3;
+            player.damage = 10;
+            player.speed = 8;
+            player.boomerangSpeed = 14;
+            player.maxBoomerangs = 1;
+            player.x = CANVAS_WIDTH / 2 - player.width / 2;
+            player.y = CANVAS_HEIGHT - 80;
+
+            bullets = [];
+            upgrades = [];
+            boomerangs = [];
+            particles = [];
+            floatingTexts = [];
+            invincible = false;
+            shakeIntensity = 0;
+            shakeDuration = 0;
+
+            createBoss();
+            updateHUD();
+
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('game-over-screen').style.display = 'none';
+            document.getElementById('victory-screen').style.display = 'none';
+
+            gameRunning = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ── Input ───────────────────────────────────────────────
+        document.addEventListener('keydown', e => {
+            keys[e.key] = true;
+
+            if ((e.key === ' ' || e.key === 'Spacebar') && gameRunning) {
+                e.preventDefault();
+                createBoomerang();
+            }
+
+            // M key to toggle mute
+            if (e.key === 'm' || e.key === 'M') {
+                Audio8Bit.toggleMute();
+            }
+        });
+
+        document.addEventListener('keyup', e => {
+            keys[e.key] = false;
+        });
+
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', startGame);
+        document.getElementById('next-level-btn').addEventListener('click', nextLevel);
+        document.getElementById('mute-btn').addEventListener('click', () => {
+            Audio8Bit.init();
+            Audio8Bit.toggleMute();
+        });
+
+        // Initial HUD render
+        updateHUD();
+    </script>
+</body>
+</html>
