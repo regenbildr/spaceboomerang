@@ -192,7 +192,7 @@
     </div>
     <canvas id="game-canvas" width="800" height="600"></canvas>
     <div class="mobile-control-bar" id="mobile-control-bar">
-      <span class="mobile-control-bar-label">&#9664; SLIDE TO MOVE &#9654; &bull; TAP TO THROW</span>
+      <span class="mobile-control-bar-label">&#9664; SLIDE TO MOVE &#9654; &bull; RELEASE TO THROW</span>
       <div class="control-indicator" id="control-indicator"></div>
     </div>
     <div class="controls-info" id="controls-info">WASD / Arrow Keys: Move | SPACE: Throw Boomerang | M: Mute</div>
@@ -851,10 +851,11 @@
 
       const bulletSpeed = 5 + level * 0.5;
       const count = boss.enraged ? boss.bulletsPerShot + 2 : boss.bulletsPerShot;
+      const aimJitter = (Math.random() - 0.5) * 20 * (Math.PI / 180);
 
       for (let i = 0; i < count; i++) {
         const spread = (i - (count - 1) / 2) * 18;
-        const angle = baseAngle + (spread * Math.PI / 180);
+        const angle = baseAngle + aimJitter + (spread * Math.PI / 180);
 
         bullets.push({
           x: centerX,
@@ -1540,6 +1541,16 @@
       }
 
       if (e.key === 'm' || e.key === 'M') Audio8Bit.toggleMute();
+
+      if (e.key === 'Enter') {
+        if (document.getElementById('victory-screen').style.display !== 'none') {
+          nextLevel();
+        } else if (document.getElementById('game-over-screen').style.display !== 'none') {
+          startGame();
+        } else if (document.getElementById('start-screen').style.display !== 'none') {
+          startGame();
+        }
+      }
     });
 
     document.addEventListener('keyup', e => { keys[e.key] = false; });
@@ -1547,38 +1558,35 @@
     if (isMobile) {
       const controlBar = document.getElementById('mobile-control-bar');
       const indicator = document.getElementById('control-indicator');
-      let barTouchId = null;
-      let barTouchStartX = 0;
-      let barTouchStartY = 0;
-      let barTouchStartTime = 0;
-      let barTouchMoved = false;
+      let activeTouchId = null;
 
-      controlBar.addEventListener('touchstart', e => {
-        e.preventDefault();
+      document.addEventListener('touchstart', e => {
         if (!gameRunning) return;
         const touch = e.changedTouches[0];
-        barTouchId = touch.identifier;
-        barTouchStartX = touch.clientX;
-        barTouchStartY = touch.clientY;
+        if (touch.target.closest('.mute-btn, .btn, .overlay')) return;
+        if (activeTouchId !== null) return;
+        e.preventDefault();
+
+        activeTouchId = touch.identifier;
         lastTouchX = touch.clientX;
         lastTouchY = touch.clientY;
-        barTouchStartTime = performance.now();
-        barTouchMoved = false;
         touchActive = true;
+        touchDeltaX = 0;
+        touchDeltaY = 0;
 
-        const rect = controlBar.getBoundingClientRect();
-        indicator.style.left = (touch.clientX - rect.left) + 'px';
+        const barRect = controlBar.getBoundingClientRect();
+        indicator.style.left = Math.max(25, Math.min(barRect.width - 25, touch.clientX - barRect.left)) + 'px';
         indicator.style.display = 'block';
       }, { passive: false });
 
-      controlBar.addEventListener('touchmove', e => {
-        e.preventDefault();
-        if (!gameRunning || barTouchId === null) return;
+      document.addEventListener('touchmove', e => {
+        if (!gameRunning || activeTouchId === null) return;
         let touch = null;
         for (const t of e.changedTouches) {
-          if (t.identifier === barTouchId) { touch = t; break; }
+          if (t.identifier === activeTouchId) { touch = t; break; }
         }
         if (!touch) return;
+        e.preventDefault();
 
         const dx = touch.clientX - lastTouchX;
         const dy = touch.clientY - lastTouchY;
@@ -1593,46 +1601,41 @@
         lastTouchX = touch.clientX;
         lastTouchY = touch.clientY;
 
-        const totalDx = touch.clientX - barTouchStartX;
-        const totalDy = touch.clientY - barTouchStartY;
-        if (Math.abs(totalDx) > 8 || Math.abs(totalDy) > 8) barTouchMoved = true;
-
         const barRect = controlBar.getBoundingClientRect();
         indicator.style.left = Math.max(25, Math.min(barRect.width - 25, touch.clientX - barRect.left)) + 'px';
       }, { passive: false });
 
-      controlBar.addEventListener('touchend', e => {
-        e.preventDefault();
+      document.addEventListener('touchend', e => {
+        if (activeTouchId === null) return;
         let found = false;
         for (const t of e.changedTouches) {
-          if (t.identifier === barTouchId) { found = true; break; }
+          if (t.identifier === activeTouchId) { found = true; break; }
         }
         if (!found) return;
 
-        if (gameRunning && (!barTouchMoved || (performance.now() - barTouchStartTime) < 200)) {
-          createBoomerang();
-        }
+        if (gameRunning) createBoomerang();
 
-        barTouchId = null;
+        activeTouchId = null;
         touchActive = false;
         touchDeltaX = 0;
         touchDeltaY = 0;
         indicator.style.display = 'none';
       }, { passive: false });
 
-      controlBar.addEventListener('touchcancel', () => {
-        barTouchId = null;
+      document.addEventListener('touchcancel', e => {
+        if (activeTouchId === null) return;
+        let found = false;
+        for (const t of e.changedTouches) {
+          if (t.identifier === activeTouchId) { found = true; break; }
+        }
+        if (!found) return;
+
+        activeTouchId = null;
         touchActive = false;
         touchDeltaX = 0;
         touchDeltaY = 0;
         indicator.style.display = 'none';
       });
-
-      // Tap game canvas to throw boomerang (second finger while dragging bar)
-      canvas.addEventListener('touchstart', e => {
-        e.preventDefault();
-        if (gameRunning) createBoomerang();
-      }, { passive: false });
     }
 
     document.getElementById('start-btn').addEventListener('click', startGame);
@@ -1654,7 +1657,7 @@
 
     if (isMobile) {
       document.getElementById('controls-info').textContent =
-        'Slide Control Bar: Move Ship | Tap: Throw Boomerang';
+        'Slide to Move | Release to Throw';
     }
 
     updateHUD();
