@@ -1031,8 +1031,12 @@
       switch (type) {
         case 'damage': player.damage += 2; break;
         case 'health':
-          player.maxHearts += 1;
-          player.hearts = Math.min(player.hearts + 1, player.maxHearts);
+          if (player.hearts < player.maxHearts) {
+            player.hearts += 1;
+          } else {
+            player.maxHearts += 1;
+            player.hearts += 1;
+          }
           break;
         case 'speed': player.speed += 0.5; break;
         case 'multishot': player.maxBoomerangs += 1; break;
@@ -1656,10 +1660,14 @@
       }
     });
 
-    if (isMobile) {
-      document.getElementById('controls-info').textContent =
-        'Slide to Move | Release to Throw';
+    function updateControlsInfo() {
+      const barVisible = window.getComputedStyle(document.getElementById('mobile-control-bar')).display !== 'none';
+      document.getElementById('controls-info').textContent = barVisible
+        ? 'Slide to Move | Release to Throw'
+        : 'WASD / Arrow Keys: Move | SPACE: Throw Boomerang | ENTER: Continue | M: Mute';
     }
+    updateControlsInfo();
+    window.addEventListener('resize', updateControlsInfo);
 
     updateHUD();
   </script>
