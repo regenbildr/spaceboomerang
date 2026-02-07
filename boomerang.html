@@ -113,14 +113,52 @@
     .mute-btn:hover { border-color: #0ff; box-shadow: 0 0 10px rgba(0, 255, 255, 0.3); }
     #game-canvas { touch-action: none; }
 
+    .mobile-control-bar {
+      display: none;
+      width: 100%;
+      height: 70px;
+      background: rgba(0, 255, 255, 0.06);
+      border: 2px solid rgba(0, 255, 255, 0.2);
+      border-radius: 10px;
+      touch-action: none;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .mobile-control-bar-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(0, 255, 255, 0.35);
+      font-size: 13px;
+      font-family: 'Segoe UI', sans-serif;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .control-indicator {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(0, 255, 255, 0.15);
+      border: 2px solid rgba(0, 255, 255, 0.4);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      display: none;
+    }
+
     @media (max-width: 840px) {
-      .game-wrapper { gap: 5px; width: 100vw; padding: 5px; }
-      .hud { width: 100%; font-size: 14px; padding: 6px 10px; }
+      .game-wrapper { gap: 4px; width: 100vw; height: 100vh; height: 100dvh; padding: 4px; }
+      .hud { width: 100%; font-size: 14px; padding: 6px 10px; flex-shrink: 0; }
       .stat-value { font-size: 16px; }
       .stats { gap: 15px; }
       .hearts { font-size: 18px; }
-      #game-canvas { width: 100%; height: auto; border-width: 2px; }
-      .controls-info { font-size: 12px; }
+      #game-canvas { width: 100%; flex: 1; min-height: 0; border-width: 2px; }
+      .controls-info { font-size: 12px; flex-shrink: 0; }
+      .mobile-control-bar { display: block; }
       .overlay { padding: 30px 20px; width: 90vw; max-height: 90vh; overflow-y: auto; }
       #start-screen h1 { font-size: 32px; }
       .boomerang-icon { font-size: 48px; }
@@ -153,6 +191,10 @@
       </div>
     </div>
     <canvas id="game-canvas" width="800" height="600"></canvas>
+    <div class="mobile-control-bar" id="mobile-control-bar">
+      <span class="mobile-control-bar-label">&#9664; SLIDE TO MOVE &#9654; &bull; TAP TO THROW</span>
+      <div class="control-indicator" id="control-indicator"></div>
+    </div>
     <div class="controls-info" id="controls-info">WASD / Arrow Keys: Move | SPACE: Throw Boomerang | M: Mute</div>
   </div>
 
@@ -198,8 +240,8 @@
     const canvas = document.getElementById('game-canvas');
     const ctx = canvas.getContext('2d');
 
-    const CANVAS_WIDTH = canvas.width;
-    const CANVAS_HEIGHT = canvas.height;
+    let CANVAS_WIDTH = canvas.width;
+    let CANVAS_HEIGHT = canvas.height;
 
     let gameRunning = false;
     let level = 1;
@@ -531,7 +573,31 @@
         starLayers.push({ stars, speed: 0.2 + layer * 0.3 });
       }
     }
+    function resizeCanvas() {
+      if (!isMobile) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      CANVAS_WIDTH = 800;
+      CANVAS_HEIGHT = Math.round(800 * (rect.height / rect.width));
+      CANVAS_HEIGHT = Math.max(600, Math.min(1600, CANVAS_HEIGHT));
+
+      canvas.width = CANVAS_WIDTH;
+      canvas.height = CANVAS_HEIGHT;
+
+      player.x = Math.max(0, Math.min(CANVAS_WIDTH - player.width, player.x));
+      player.y = Math.max(0, Math.min(CANVAS_HEIGHT - player.height - 10, player.y));
+
+      initStars();
+    }
+
     initStars();
+    resizeCanvas();
+
+    if (isMobile) {
+      window.addEventListener('resize', resizeCanvas);
+      screen.orientation?.addEventListener('change', () => setTimeout(resizeCanvas, 150));
+    }
 
     function spawnParticles(x, y, color, count, speedRange, life) {
       for (let i = 0; i < count; i++) {
@@ -1044,6 +1110,7 @@
     }
 
     function nextLevel() {
+      resizeCanvas();
       level++;
       bullets = [];
       upgrades = [];
@@ -1425,6 +1492,7 @@
     }
 
     async function startGame() {
+      resizeCanvas();
       // Ensure audio is initialized + resumed on the start gesture
       await Audio8Bit.init();
       Audio8Bit.playGameMusic();
@@ -1477,53 +1545,94 @@
     document.addEventListener('keyup', e => { keys[e.key] = false; });
 
     if (isMobile) {
-      function getTouchCanvasPos(touch) {
+      const controlBar = document.getElementById('mobile-control-bar');
+      const indicator = document.getElementById('control-indicator');
+      let barTouchId = null;
+      let barTouchStartX = 0;
+      let barTouchStartY = 0;
+      let barTouchStartTime = 0;
+      let barTouchMoved = false;
+
+      controlBar.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (!gameRunning) return;
+        const touch = e.changedTouches[0];
+        barTouchId = touch.identifier;
+        barTouchStartX = touch.clientX;
+        barTouchStartY = touch.clientY;
+        lastTouchX = touch.clientX;
+        lastTouchY = touch.clientY;
+        barTouchStartTime = performance.now();
+        barTouchMoved = false;
+        touchActive = true;
+
+        const rect = controlBar.getBoundingClientRect();
+        indicator.style.left = (touch.clientX - rect.left) + 'px';
+        indicator.style.display = 'block';
+      }, { passive: false });
+
+      controlBar.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (!gameRunning || barTouchId === null) return;
+        let touch = null;
+        for (const t of e.changedTouches) {
+          if (t.identifier === barTouchId) { touch = t; break; }
+        }
+        if (!touch) return;
+
+        const dx = touch.clientX - lastTouchX;
+        const dy = touch.clientY - lastTouchY;
+
         const rect = canvas.getBoundingClientRect();
         const scaleX = CANVAS_WIDTH / rect.width;
         const scaleY = CANVAS_HEIGHT / rect.height;
-        return {
-          x: (touch.clientX - rect.left) * scaleX,
-          y: (touch.clientY - rect.top) * scaleY
-        };
-      }
 
+        touchDeltaX += dx * scaleX * 1.5;
+        touchDeltaY += dy * scaleY * 1.5;
+
+        lastTouchX = touch.clientX;
+        lastTouchY = touch.clientY;
+
+        const totalDx = touch.clientX - barTouchStartX;
+        const totalDy = touch.clientY - barTouchStartY;
+        if (Math.abs(totalDx) > 8 || Math.abs(totalDy) > 8) barTouchMoved = true;
+
+        const barRect = controlBar.getBoundingClientRect();
+        indicator.style.left = Math.max(25, Math.min(barRect.width - 25, touch.clientX - barRect.left)) + 'px';
+      }, { passive: false });
+
+      controlBar.addEventListener('touchend', e => {
+        e.preventDefault();
+        let found = false;
+        for (const t of e.changedTouches) {
+          if (t.identifier === barTouchId) { found = true; break; }
+        }
+        if (!found) return;
+
+        if (gameRunning && (!barTouchMoved || (performance.now() - barTouchStartTime) < 200)) {
+          createBoomerang();
+        }
+
+        barTouchId = null;
+        touchActive = false;
+        touchDeltaX = 0;
+        touchDeltaY = 0;
+        indicator.style.display = 'none';
+      }, { passive: false });
+
+      controlBar.addEventListener('touchcancel', () => {
+        barTouchId = null;
+        touchActive = false;
+        touchDeltaX = 0;
+        touchDeltaY = 0;
+        indicator.style.display = 'none';
+      });
+
+      // Tap game canvas to throw boomerang (second finger while dragging bar)
       canvas.addEventListener('touchstart', e => {
         e.preventDefault();
-        if (!gameRunning) return;
-        const touch = e.touches[0];
-        const pos = getTouchCanvasPos(touch);
-        touchActive = true;
-        lastTouchX = pos.x;
-        lastTouchY = pos.y;
-        touchDeltaX = 0;
-        touchDeltaY = 0;
+        if (gameRunning) createBoomerang();
       }, { passive: false });
-
-      canvas.addEventListener('touchmove', e => {
-        e.preventDefault();
-        if (!touchActive || !gameRunning) return;
-        const touch = e.touches[0];
-        const pos = getTouchCanvasPos(touch);
-        touchDeltaX += pos.x - lastTouchX;
-        touchDeltaY += pos.y - lastTouchY;
-        lastTouchX = pos.x;
-        lastTouchY = pos.y;
-      }, { passive: false });
-
-      canvas.addEventListener('touchend', e => {
-        e.preventDefault();
-        if (!gameRunning) return;
-        touchActive = false;
-        touchDeltaX = 0;
-        touchDeltaY = 0;
-        createBoomerang();
-      }, { passive: false });
-
-      canvas.addEventListener('touchcancel', () => {
-        touchActive = false;
-        touchDeltaX = 0;
-        touchDeltaY = 0;
-      });
     }
 
     document.getElementById('start-btn').addEventListener('click', startGame);
@@ -1545,7 +1654,7 @@
 
     if (isMobile) {
       document.getElementById('controls-info').textContent =
-        'Touch & Drag: Move | Release: Throw Boomerang';
+        'Slide Control Bar: Move Ship | Tap: Throw Boomerang';
     }
 
     updateHUD();
