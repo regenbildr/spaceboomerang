@@ -195,7 +195,7 @@
       <span class="mobile-control-bar-label">&#9664; SLIDE TO MOVE &#9654; &bull; RELEASE TO THROW</span>
       <div class="control-indicator" id="control-indicator"></div>
     </div>
-    <div class="controls-info" id="controls-info">WASD / Arrow Keys: Move | SPACE: Throw Boomerang | M: Mute</div>
+    <div class="controls-info" id="controls-info">WASD / Arrow Keys: Move | SPACE: Throw Boomerang | ENTER: Continue | M: Mute</div>
   </div>
 
   <div id="start-screen" class="overlay">
@@ -681,7 +681,7 @@
       if (boomerangs.length > 0) return;
 
       const count = player.maxBoomerangs;
-      const totalSpread = 60 * (Math.PI / 180);
+      const totalSpread = (count % 2 === 0 ? 40 : 60) * (Math.PI / 180);
       const angleStep = count > 1 ? totalSpread / (count - 1) : 0;
       const startAngle = count > 1 ? -totalSpread / 2 : 0;
 
@@ -1111,6 +1111,7 @@
     }
 
     function nextLevel() {
+      document.getElementById('celebration').innerHTML = '';
       resizeCanvas();
       level++;
       bullets = [];
